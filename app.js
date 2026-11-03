@@ -1,3 +1,4 @@
+window.__APPBOOT='appjs-first'; if (typeof setBoot==='function') setBoot('appjs-first-line');
 /* Secure Reader clone - classic script (no module dependency for UI state) */
 const API = 'https://books.streamfiles.eu.org/api';
 const PDFJS_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';

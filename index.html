@@ -72,8 +72,17 @@
   </div>
 </div>
 
-<script>setBoot("before-appjs");</script>
+<script>
+window.__ERR=null;
+window.onerror=function(m,s,l,c){window.__ERR=(m||'?')+' @'+(l||'?')+':'+(c||'?');setBoot('BOOT-ERR: '+window.__ERR);return false;};
+setBoot('before-appjs');
+</script>
 <script src="app.js"></script>
-<script>setBoot("after-appjs: "+(window.__APPBOOT||"appjs-did-not-run"));</script>
+<script>
+if(window.__ERR){setBoot('ERR-WAS: '+window.__ERR);}
+else{setBoot('after: '+(window.__APPBOOT||'appjs-did-not-run'));}
+setTimeout(function(){if(window.__FETCHJS)setBoot(setBoot.cur?setBoot.cur+' | ':'');setBoot((document.getElementById('bootline').textContent||'')+' | '+window.__FETCHJS);},1500);
+fetch('app.js',{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){window.__FETCHJS='fetch-appjs len='+t.length+' head='+t.slice(0,30);}).catch(function(e){window.__FETCHJS='fetch-err:'+e.message;});
+</script>
 </body>
 </html>
