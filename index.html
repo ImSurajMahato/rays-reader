@@ -19,6 +19,10 @@
     <div class="topbar-note">Digital Module Reader</div>
   </header>
   <main class="home-main">
+    <div id="booksWrap" class="hidden">
+      <div class="section-head"><h2>Books</h2><span class="section-count" id="bookCount"></span></div>
+      <section class="chapter-grid" id="booksGrid"></section>
+    </div>
     <section class="hero glass" id="heroCard">
       <div class="hero-skeleton sk-img"></div>
       <div class="hero-info">
@@ -81,7 +85,8 @@ const params = new URLSearchParams(location.search);
 
 /* ---------- recovered pipeline (from the audit) ---------- */
 const API = '/api';
-const DEFAULT_CHAPTER_ID = '699c11b428569e839bf7e7d9'; // demo chapter: Units and Measurements
+const BOOK_IDS = ['699c11b428569e839bf7e7d9']; // ek line = ek book (viewer page ka book-id)
+const DEFAULT_CHAPTER_ID = BOOK_IDS[0];
 const KEY = [90, 165, 195, 60, 15, 240, 150, 105];
 
 const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -95,14 +100,38 @@ const $ = (id) => document.getElementById(id);
 
 /* ================= HOME ================= */
 async function initHome() {
-  const bookId = params.get('book') || DEFAULT_CHAPTER_ID;
-  let book = null;
-  try {
-    const r = await fetch(`${API}/books.php?book_chapters=${encodeURIComponent(bookId)}`);
-    const j = await r.json();
-    if (j.success && j.data) book = j.data;
-  } catch (_) {}
-  if (!book) { $('chapterGrid').innerHTML = '<div class="chap">Book list load nahi hui. Reload karke dekho.</div>'; return; }
+  const wanted = params.get('book') || BOOK_IDS[0];
+  const fetched = await Promise.all(BOOK_IDS.map(async (id) => {
+    try {
+      const r = await fetch(`${API}/books.php?book_chapters=${encodeURIComponent(id)}`);
+      const j = await r.json();
+      return (j.success && j.data) ? { id, book: j.data } : null;
+    } catch (_) { return null; }
+  }));
+  const books = fetched.filter(Boolean);
+  if (!books.length) { $('chapterGrid').innerHTML = '<div class="chap">Book list load nahi hui. Reload karke dekho.</div>'; return; }
+
+  // books switcher: 1 se zyada books ho to grid dikhta hai
+  const wrap = $('booksWrap');
+  if (books.length > 1) {
+    wrap.classList.remove('hidden');
+    $('bookCount').textContent = `${books.length} books`;
+    const grid = $('booksGrid'); grid.innerHTML = '';
+    books.forEach(({ id, book }) => {
+      const cover = book.coverImage && (book.coverImage.fullUrl || (book.coverImage.baseUrl ? book.coverImage.baseUrl + book.coverImage.key : ''));
+      const card = document.createElement('div');
+      card.className = 'chap bookcard' + (id === wanted ? ' active' : '');
+      card.innerHTML = `
+        ${cover ? `<img class="book-thumb" src="${escapeHtml(cover)}" alt="" loading="lazy">` : ''}
+        <div><div class="book-t">${escapeHtml(book.title || 'Book')}</div>
+        <div class="chap-meta">${book.noOfChapters || (book.chapterDetails || []).length} chapters${book.edition ? ' \u00b7 ' + escapeHtml(book.edition) : ''}</div></div>`;
+      card.onclick = () => { location.href = '?' + new URLSearchParams({ book: id }).toString(); };
+      grid.appendChild(card);
+    });
+  }
+
+  const sel = books.find((b) => b.id === wanted) || books[0];
+  const book = sel.book;
 
   // hero
   const cover = book.coverImage && (book.coverImage.fullUrl || (book.coverImage.baseUrl ? book.coverImage.baseUrl + book.coverImage.key : ''));
@@ -112,13 +141,13 @@ async function initHome() {
   const info = document.createElement('div');
   info.className = 'hero-info';
   const badges = [
-    book.displayClass && `<span class="badge">${book.displayClass}</span>`,
-    (book.exams || []).join(', ') && `<span class="badge">${(book.exams || []).join(', ')}</span>`,
-    book.edition && `<span class="badge">${book.edition}</span>`,
+    book.displayClass && `<span class="badge">${escapeHtml(book.displayClass)}</span>`,
+    (book.exams || []).join(', ') && `<span class="badge">${escapeHtml((book.exams || []).join(', '))}</span>`,
+    book.edition && `<span class="badge">${escapeHtml(book.edition)}</span>`,
   ].filter(Boolean).join('');
   info.innerHTML = `
     <div class="hero-title">${escapeHtml(book.title || 'Digital Module')}</div>
-    <div class="hero-sub">${escapeHtml(book.subTitle || book.author || '')} · ${book.noOfChapters || (book.chapterDetails || []).length} chapters</div>
+    <div class="hero-sub">${escapeHtml(book.subTitle || book.author || '')} \u00b7 ${book.noOfChapters || (book.chapterDetails || []).length} chapters</div>
     <div class="hero-badges">${badges}</div>`;
   hero.appendChild(info);
 
@@ -135,7 +164,7 @@ async function initHome() {
       <div class="chap-title">${escapeHtml(c.title || 'Chapter')}</div>
       <div class="chap-meta">${c.totalPageCount ? c.totalPageCount + ' pages' : ''}</div>`;
     card.onclick = () => {
-      const q = new URLSearchParams({ ref: c.encryptedQuery || '', pages: c.totalPageCount || '', title: c.title || 'Chapter' });
+      const q = new URLSearchParams({ ref: c.encryptedQuery || '', pages: c.totalPageCount || '', title: c.title || 'Chapter', book: sel.id });
       location.href = '?' + q.toString();
     };
     $('chapterGrid').appendChild(card);
