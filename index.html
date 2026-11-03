@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="bootline" style="position:fixed;top:2px;left:2px;z-index:9999;font-size:11px;color:#7fd"></div>
+<script>function setBoot(t){document.getElementById("bootline").textContent=t;}setBoot("boot:inline");window.addEventListener("error",function(e){setBoot("BOOT-ERR: "+(e.message||e.type));});</script>
 <div class="bg-glow g1"></div>
 <div class="bg-glow g2"></div>
 
@@ -70,6 +72,8 @@
   </div>
 </div>
 
+<script>setBoot("before-appjs");</script>
 <script src="app.js"></script>
+<script>setBoot("after-appjs: "+(window.__APPBOOT||"appjs-did-not-run"));</script>
 </body>
 </html>

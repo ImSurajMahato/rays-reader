@@ -5,6 +5,7 @@ const DEFAULT_CHAPTER_ID = '699c11b428569e839bf7e7d9';
 const KEY = [90, 165, 195, 60, 15, 240, 150, 105];
 
 const $ = (id) => document.getElementById(id);
+window.__APPBOOT='appjs-ok'; if (typeof setBoot==='function') setBoot('appjs-ok');
 const params = new URLSearchParams(location.search);
 
 function show(id){ $(id).classList.remove('hidden'); }
@@ -32,8 +33,8 @@ const R = { ref: '', pages: 0, title: '', cur: 0, zoom: 1, cache: new Map(), bus
 
 function openReader() {
 try {
-  if (params.get('ref')) openReader();
-  else initHome();
+  if (params.get('ref')) { if(typeof setBoot==='function') setBoot('route:reader'); openReader(); }
+  else { if(typeof setBoot==='function') setBoot('route:home'); initHome(); }
 } catch (e) {
   if (params.get('ref')) { $('errMsg').textContent = 'Boot error: ' + e.message; show('errBox'); }
 }
