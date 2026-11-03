@@ -28,6 +28,9 @@ async function getPdfJs() {
   return pdfjsLib;
 }
 
+const R = { ref: '', pages: 0, title: '', cur: 0, zoom: 1, cache: new Map(), busy: false };
+
+function openReader() {
 try {
   if (params.get('ref')) openReader();
   else initHome();
@@ -83,8 +86,6 @@ async function initHome() {
 }
 
 /* ================= READER ================= */
-const R = { ref: '', pages: 0, title: '', cur: 0, zoom: 1, cache: new Map(), busy: false };
-
 function openReader() {
   $('homeView').classList.add('hidden');
   $('readerView').classList.remove('hidden');
