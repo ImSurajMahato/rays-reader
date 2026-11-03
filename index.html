@@ -77,6 +77,8 @@ import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
 
+const params = new URLSearchParams(location.search);
+
 /* ---------- recovered pipeline (from the audit) ---------- */
 const API = '/api';
 const DEFAULT_CHAPTER_ID = '699c11b428569e839bf7e7d9'; // demo chapter: Units and Measurements
@@ -239,12 +241,12 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+const bootErr = (m) => document.body.insertAdjacentHTML('beforeend', '<pre style="color:#f87171;padding:16px">Boot error: ' + m + '</pre>');
 try {
-  const params = new URLSearchParams(location.search);
   if (params.get('ref')) openReader(params);
-  else initHome();
+  else initHome().catch((e) => bootErr('Home load error: ' + e.message));
 } catch (e) {
-  document.body.insertAdjacentHTML('beforeend', '<pre style="color:#f87171;padding:16px">Boot error: ' + e.message + '</pre>');
+  bootErr(e.message);
 }
 </script>
 </body>
