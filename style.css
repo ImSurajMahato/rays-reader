@@ -100,3 +100,10 @@ body{
 .book-cover{width:100%;aspect-ratio:168/248;object-fit:cover;border-radius:10px;background:#101a30}
 .book-info{display:flex;flex-direction:column;gap:4px}
 .book-t{font-size:13.5px;font-weight:650;line-height:1.35}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:18px 4px 0}
+.chip-btn{padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--glass2);color:#dbeafe;font:inherit;font-size:13.5px;cursor:pointer;transition:border-color .18s ease,background .18s ease}
+.chip-btn:hover{border-color:var(--line2)}
+.chip-btn.active{background:linear-gradient(135deg,rgba(59,130,246,.35),rgba(29,78,216,.35));border-color:rgba(59,130,246,.65);color:#fff}
+.back-btn{margin:18px 4px 0;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--glass2);color:#dbeafe;font:inherit;font-size:13.5px;cursor:pointer}
+.back-btn:hover{border-color:var(--line2)}

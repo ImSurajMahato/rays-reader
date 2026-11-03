@@ -20,10 +20,13 @@
   </header>
   <main class="home-main">
     <div id="booksWrap" class="hidden">
-      <div class="section-head"><h2>Books</h2><span class="section-count" id="bookCount"></span></div>
+      <div class="chips" id="cohortChips"></div>
+      <div class="section-head"><h2 id="booksTitle">All Books</h2><span class="section-count" id="bookCount"></span></div>
       <section class="chapter-grid" id="booksGrid"></section>
     </div>
-    <section class="hero glass" id="heroCard">
+    <div id="bookDetail" class="hidden">
+      <button class="back-btn" id="backCatalog">&#8592; All Books</button>
+      <section class="hero glass" id="heroCard">
       <div class="hero-skeleton sk-img"></div>
       <div class="hero-info">
         <div class="sk sk-line w60"></div>
@@ -33,6 +36,7 @@
     </section>
     <div class="section-head"><h2>Chapters</h2><span class="section-count" id="chapterCount"></span></div>
     <section class="chapter-grid" id="chapterGrid"></section>
+    </div>
   </main>
 </div>
 
@@ -86,7 +90,7 @@ const params = new URLSearchParams(location.search);
 /* ---------- recovered pipeline (from the audit) ---------- */
 const API = '/api';
 const COHORTS = ['12_NEET', '11_NEET', '12_SCHOOL_PREP', 'DROPPER_NEET'];
-const DEFAULT_BOOK_ID = '699c11b428569e839bf7e7d9';
+const COHORT_LABELS = { '12_NEET': '12th NEET', '11_NEET': '11th NEET', '12_SCHOOL_PREP': '12th Board', 'DROPPER_NEET': 'Dropper NEET' };
 const KEY = [90, 165, 195, 60, 15, 240, 150, 105];
 
 const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -99,52 +103,41 @@ const decrypt = (u8) => {
 const $ = (id) => document.getElementById(id);
 
 /* ================= HOME ================= */
-async function initHome() {
-  const wanted = params.get('book') || DEFAULT_BOOK_ID;
+const catCache = {};
+let selCohort = 'ALL';
+const label = (c) => COHORT_LABELS[c] || c.replace(/_/g, ' ').replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
 
-  // A-to-Z catalog: cohorts -> explorePages -> packs -> books
-  let catalog = [];
+async function fetchCohort(slug) {
+  if (catCache[slug]) return catCache[slug];
   try {
-    let slugs = COHORTS;
-    try {
-      const rc = await (await fetch(`${API}/books.php?resolve_cohorts=${encodeURIComponent(wanted)}`)).json();
-      if (rc.success && Array.isArray(rc.data) && rc.data.length) slugs = rc.data.filter((x) => typeof x === 'string');
-    } catch (_) {}
-    const pagesPerCohort = await Promise.all(slugs.map(async (c) => {
-      try {
-        const r = await fetch(`${API}/books.php?cohort=${encodeURIComponent(c)}`);
-        const j = await r.json();
-        return (j.success && j.data) ? (j.data.explorePages || []) : [];
-      } catch (_) { return []; }
-    }));
+    const r = await fetch(`${API}/books.php?cohort=${encodeURIComponent(slug)}`);
+    const j = await r.json();
     const seen = new Map();
-    pagesPerCohort.flat().forEach((ep) => {
-      const page = ep.explorePage || {};
-      (page.books || []).forEach((pack) => {
+    ((j.success && j.data) ? (j.data.explorePages || []) : []).forEach((ep) => {
+      ((ep.explorePage || {}).books || []).forEach((pack) => {
         (pack.books || []).forEach((b) => {
           if (b.bookId && !seen.has(b.bookId)) seen.set(b.bookId, {
-            id: b.bookId,
-            title: b.title || 'Book',
-            author: b.author || '',
-            cover: (b.coverImage || {}).fullUrl || '',
-            sec: page.name || '',
+            id: b.bookId, title: b.title || 'Book', author: b.author || '', cover: (b.coverImage || {}).fullUrl || '',
           });
         });
       });
     });
-    catalog = [...seen.values()];
-  } catch (_) {}
+    catCache[slug] = [...seen.values()];
+  } catch (_) { catCache[slug] = []; }
+  return catCache[slug];
+}
 
-  const wrap = $('booksWrap');
-  wrap.classList.remove('hidden');
-  $('bookCount').textContent = `${catalog.length} books`;
+function renderBooksGrid() {
   const grid = $('booksGrid'); grid.innerHTML = '';
-  if (!catalog.length) {
-    grid.innerHTML = '<div class="chap">Catalog load nahi hua. Reload karke dekho.</div>';
-  }
-  catalog.forEach((b) => {
+  const seen = new Set(); const out = [];
+  (selCohort === 'ALL' ? Object.values(catCache).flat() : (catCache[selCohort] || []))
+    .forEach((b) => { if (!seen.has(b.id)) { seen.add(b.id); out.push(b); } });
+  $('booksTitle').textContent = selCohort === 'ALL' ? 'All Books' : label(selCohort);
+  $('bookCount').textContent = `${out.length} books`;
+  if (!out.length) { grid.innerHTML = '<div class="chap">Is category me koi book nahi mili.</div>'; return; }
+  out.forEach((b) => {
     const card = document.createElement('div');
-    card.className = 'chap bookcard' + (b.id === wanted ? ' active' : '');
+    card.className = 'chap bookcard';
     card.innerHTML = `
       ${b.cover ? `<img class="book-cover" src="${escapeHtml(b.cover)}" alt="" loading="lazy">` : '<div class="book-cover"></div>'}
       <div class="book-info"><div class="book-t">${escapeHtml(b.title)}</div>
@@ -152,52 +145,81 @@ async function initHome() {
     card.onclick = () => { location.href = '?' + new URLSearchParams({ book: b.id }).toString(); };
     grid.appendChild(card);
   });
+}
 
-  // selected book -> hero + chapters
-  let book = null;
-  try {
-    const r = await fetch(`${API}/books.php?book_chapters=${encodeURIComponent(wanted)}`);
-    const j = await r.json();
-    if (j.success && j.data) book = j.data;
-  } catch (_) {}
-  if (!book) { $('chapterGrid').innerHTML = '<div class="chap">Is book ka content load nahi hua. Doosri book try karo.</div>'; return; }
-
-  // hero
-  const cover = book.coverImage && (book.coverImage.fullUrl || (book.coverImage.baseUrl ? book.coverImage.baseUrl + book.coverImage.key : ''));
-  const hero = $('heroCard');
-  hero.innerHTML = '';
-  if (cover) { const img = new Image(); img.src = cover; img.className = 'hero-cover'; img.loading = 'lazy'; hero.appendChild(img); }
-  const info = document.createElement('div');
-  info.className = 'hero-info';
-  const badges = [
-    book.displayClass && `<span class="badge">${escapeHtml(book.displayClass)}</span>`,
-    (book.exams || []).join(', ') && `<span class="badge">${escapeHtml((book.exams || []).join(', '))}</span>`,
-    book.edition && `<span class="badge">${escapeHtml(book.edition)}</span>`,
-  ].filter(Boolean).join('');
-  info.innerHTML = `
-    <div class="hero-title">${escapeHtml(book.title || 'Digital Module')}</div>
-    <div class="hero-sub">${escapeHtml(book.subTitle || book.author || '')} · ${book.noOfChapters || (book.chapterDetails || []).length} chapters</div>
-    <div class="hero-badges">${badges}</div>`;
-  hero.appendChild(info);
-
-  // chapters
-  const chaps = (book.chapterDetails || []).filter((c) => c.status === 'ACTIVE');
-  chaps.sort((a, b) => (parseInt(a.displayChapterNumber) || 0) - (parseInt(b.displayChapterNumber) || 0));
-  $('chapterCount').textContent = `${chaps.length} chapters`;
-  $('chapterGrid').innerHTML = '';
-  chaps.forEach((c, i) => {
-    const card = document.createElement('div');
-    card.className = 'chap';
-    card.innerHTML = `
-      <div class="chap-num">${escapeHtml(String(c.displayChapterNumber || i + 1))}</div>
-      <div class="chap-title">${escapeHtml(c.title || 'Chapter')}</div>
-      <div class="chap-meta">${c.totalPageCount ? c.totalPageCount + ' pages' : ''}</div>`;
-    card.onclick = () => {
-      const q = new URLSearchParams({ ref: c.encryptedQuery || '', pages: c.totalPageCount || '', title: c.title || 'Chapter', book: wanted });
-      location.href = '?' + q.toString();
-    };
-    $('chapterGrid').appendChild(card);
+function renderChips(slugs) {
+  const box = $('cohortChips'); box.innerHTML = '';
+  ['ALL'].concat(slugs).forEach((c) => {
+    const btn = document.createElement('button');
+    btn.className = 'chip-btn' + (c === selCohort ? ' active' : '');
+    btn.textContent = c === 'ALL' ? 'All Books' : label(c);
+    btn.onclick = () => { selCohort = c; renderChips(slugs); renderBooksGrid(); };
+    box.appendChild(btn);
   });
+}
+
+async function initHome() {
+  const wanted = params.get('book');
+
+  if (wanted) {
+    // BOOK VIEW: tap se khula hero + chapters
+    $('booksWrap').classList.add('hidden');
+    $('bookDetail').classList.remove('hidden');
+    $('backCatalog').onclick = () => { location.href = './'; };
+    let book = null;
+    try {
+      const r = await fetch(`${API}/books.php?book_chapters=${encodeURIComponent(wanted)}`);
+      const j = await r.json();
+      if (j.success && j.data) book = j.data;
+    } catch (_) {}
+    if (!book) { $('chapterGrid').innerHTML = '<div class="chap">Is book ka content load nahi hua. Wapas jaakar doosri book try karo.</div>'; return; }
+    const cover = book.coverImage && (book.coverImage.fullUrl || (book.coverImage.baseUrl ? book.coverImage.baseUrl + book.coverImage.key : ''));
+    const hero = $('heroCard');
+    hero.innerHTML = '';
+    if (cover) { const img = new Image(); img.src = cover; img.className = 'hero-cover'; img.loading = 'lazy'; hero.appendChild(img); }
+    const info = document.createElement('div');
+    info.className = 'hero-info';
+    const badges = [
+      book.displayClass && `<span class="badge">${escapeHtml(book.displayClass)}</span>`,
+      (book.exams || []).join(', ') && `<span class="badge">${escapeHtml((book.exams || []).join(', '))}</span>`,
+      book.edition && `<span class="badge">${escapeHtml(book.edition)}</span>`,
+    ].filter(Boolean).join('');
+    info.innerHTML = `
+      <div class="hero-title">${escapeHtml(book.title || 'Digital Module')}</div>
+      <div class="hero-sub">${escapeHtml(book.subTitle || book.author || '')} · ${book.noOfChapters || (book.chapterDetails || []).length} chapters</div>
+      <div class="hero-badges">${badges}</div>`;
+    hero.appendChild(info);
+    const chaps = (book.chapterDetails || []).filter((c) => c.status === 'ACTIVE');
+    chaps.sort((a, b) => (parseInt(a.displayChapterNumber) || 0) - (parseInt(b.displayChapterNumber) || 0));
+    $('chapterCount').textContent = `${chaps.length} chapters`;
+    $('chapterGrid').innerHTML = '';
+    chaps.forEach((c, i) => {
+      const card = document.createElement('div');
+      card.className = 'chap';
+      card.innerHTML = `
+        <div class="chap-num">${escapeHtml(String(c.displayChapterNumber || i + 1))}</div>
+        <div class="chap-title">${escapeHtml(c.title || 'Chapter')}</div>
+        <div class="chap-meta">${c.totalPageCount ? c.totalPageCount + ' pages' : ''}</div>`;
+      card.onclick = () => {
+        const q = new URLSearchParams({ ref: c.encryptedQuery || '', pages: c.totalPageCount || '', title: c.title || 'Chapter' });
+        location.href = '?' + q.toString();
+      };
+      $('chapterGrid').appendChild(card);
+    });
+    return;
+  }
+
+  // CATALOG VIEW: category chips + books grid
+  $('bookDetail').classList.add('hidden');
+  let slugs = COHORTS;
+  try {
+    const rc = await (await fetch(`${API}/books.php?resolve_cohorts=1`)).json();
+    if (rc.success && Array.isArray(rc.data) && rc.data.length) slugs = rc.data.filter((x) => typeof x === 'string');
+  } catch (_) {}
+  renderChips(slugs);
+  $('booksWrap').classList.remove('hidden');
+  await Promise.all(slugs.map(fetchCohort));
+  renderBooksGrid();
 }
 
 /* ================= READER ================= */
